@@ -1,0 +1,12 @@
+version "3.3"
+
+#include "zscript/twitchydoom/main.zscript"
+#include "zscript/twitchydoom/tools.zscript"
+#include "zscript/twitchydoom/commands.zscript"
+
+#include "zscript/libeye/projector.zscript"
+#include "zscript/libeye/projector gl.zscript"
+#include "zscript/libeye/projector planar.zscript"
+#include "zscript/libeye/viewport.zscript"
+
+#include "zscript/twitchydoom/namerender.zscript"

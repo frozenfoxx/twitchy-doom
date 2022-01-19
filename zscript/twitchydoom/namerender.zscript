@@ -1,0 +1,173 @@
+class Twitchy_Username : Inventory 
+{
+    Default
+    {
+        inventory.maxamount 1;
+    }
+
+    int textcolor;
+    bool visible;
+
+    Override void Tick()
+    {
+        if(owner)
+        {
+			if(textcolor == 0)
+			{
+				textcolor = RandomColor();
+			}
+
+            if(owner.health < 1)
+            {
+                A_FadeOut(0.05, FTF_CLAMP);
+            }
+            else
+            {
+                A_SetRenderStyle(owner.alpha, STYLE_Normal);
+            }
+
+            visible = (!owner.CheckSightOrRange(0, true));
+
+			Inventory i = Inventory(owner);
+
+			if(i && i.owner)
+			{
+				Destroy();
+				return;
+			}
+        }
+
+        Super.Tick();
+    }
+	
+    static void Show(Actor a, String username)
+    {
+        if(!a || a.CountInv("Twitchy_Username") > 0)
+        {
+            return;
+        }
+
+        Twitchy_Username t = Twitchy_Username(Spawn("Twitchy_Username", a.pos));
+        //t.title = username;
+		t.SetTag(username);
+        if(t.GetTag() == t.GetClassName() || t.GetTag() == "???")
+		{
+			t.SetTag(" ");
+		}
+		
+		t.textcolor = RandomColor();
+        t.AttachToOwner(a);
+    }
+
+    static int RandomColor()
+    {
+        int colors[] = 
+        {
+            0, 2, 3, 5, 6, 8, 10, 13, 19, 21, 22, 23, 24, 25
+        };
+
+        return colors[random(1, colors.Size()-1)];
+    }
+}
+
+class Twitchy_NameRenderer : EventHandler {
+	protected Le_GlScreen			gl_proj;
+	protected bool					can_project;
+	protected Actor					mo;
+	protected String				text;
+	protected double				text_offset;
+	protected Le_Viewport			viewport;
+	protected vector3				base_pos;
+
+	
+	// kd: This prepares the projector and text, which we have to align
+	// ourselves. You have to new the projector, otherwise, you may get a
+	// vm-abort, if you're unfamiliar.
+	override void OnRegister () {
+		gl_proj		= new("Le_GlScreen");
+		can_project	= gl_proj != NULL;
+		
+		text		= "";
+		text_offset	= 0;
+	}
+	
+	override void RenderOverlay (RenderEvent event) 
+	{
+		if(!can_project) 
+		{
+			return;
+		}
+		
+		ThinkerIterator ti = ThinkerIterator.Create("Twitchy_Username");
+
+		Twitchy_Username inv;
+
+		while(inv = Twitchy_Username(ti.Next()))
+		{
+            if(!inv.owner || !inv.visible || inv.owner.GetRenderStyle() == STYLE_None || inv.GetAge() < 35)
+            {
+                continue;
+            }
+
+			let window_aspect	= 1.0 * Screen.GetWidth() / Screen.GetHeight();
+			let resolution		= 480 * (window_aspect, 1);
+			let t				= event.fractic;
+			
+			gl_proj.CacheCustomResolution(resolution);
+
+			Class<Inventory> flip;
+			String flipinv = "CCards_Actor_FlipperInventory";
+			flip = (Class<Inventory>)(flipinv);
+
+			if(flip && players [consoleplayer].mo.CountInv(flip) > 0)
+			{
+				gl_proj.MirrorCacheFov(players [consoleplayer].fov);
+			}
+			else
+			{
+				gl_proj.CacheFov(players [consoleplayer].fov);
+			}
+
+			gl_proj.OrientForRenderOverlay(event);
+			gl_proj.BeginProjection();
+			gl_proj.ProjectActorPosPortal(inv.owner, (0, 0, inv.owner.default.height + 28), t);
+			
+			if(gl_proj.IsInFront()) 
+			{
+				viewport.FromHud();
+				
+				let draw_pos = viewport.SceneToCustom(
+					gl_proj.ProjectToNormal(),
+					resolution);
+
+				String fnt = Cvar.GetCvar("TwitchyDoom_UsernameFont", players[consoleplayer]).GetString();
+
+				if(fnt == "" || !Font.GetFont(fnt))
+				{
+					fnt = "JENOBIG";
+				}
+
+				Font draw_font = Font.GetFont(fnt); // "JENOBIG"
+
+				float alpha = 0.0;
+
+				if(inv.alpha > 0)
+				{
+					alpha = Clamp(inv.alpha - (inv.owner.Distance2D(players[consoleplayer].mo) - 256.0) * 0.001, 0, 1.0);
+				}				
+				
+				Screen.DrawText(
+					draw_font,
+					inv.textcolor,
+					draw_pos.x -  (0.5 * draw_font.StringWidth(inv.GetTag(""))),
+					draw_pos.y,
+					inv.GetTag(""),
+					DTA_VIRTUALWIDTHF,	resolution.x,
+					DTA_VIRTUALHEIGHTF,	resolution.y,
+					DTA_KEEPRATIO,		true,
+                    DTA_ALPHA, alpha
+				);
+			}
+		}
+	}
+}

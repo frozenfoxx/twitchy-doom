@@ -1,0 +1,34 @@
+OptionString "TwitchyDoomFonts"
+{
+    "BIGFONT", "Doom (Big)"
+    "SMALLFONT", "Doom (Small)"
+    "CONFONT", "Console"
+    "", "Jenocide (Default)"
+}
+
+OptionValue "TwitchyDoomEnabledDisabled"
+{
+    0, "Enabled"
+    1, "Disabled"
+}
+
+OptionValue "NoYes"
+{
+    0, "No"
+    1, "Yes"
+}
+
+OptionMenu "TwitchyDoomOptions"
+{
+    Title "TwitchyDoom Settings"
+
+    Option "Command Notifications", "TwitchyDoom_DisableNotifications", "TwitchyDoomEnabledDisabled"
+    Option "Username font", "TwitchyDoom_UsernameFont", "TwitchyDoomFonts"
+    Option "Use basic map markers", "TwitchyDoom_BasicMapMarkers", "NoYes"
+}
+
+AddOptionMenu "OptionsMenu"
+{
+    StaticText ""
+    Submenu "TwitchyDoom Settings", "TwitchyDoomOptions"
+}

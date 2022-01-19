@@ -1,6 +1,6 @@
 # TwitchyDoom
 
-TwitchyDoom is a mod for GZDoom that allows Twitch streamers to create commands that interact with GZDoom, allowing viewers to interact with their streams.
+TwitchyDoom is a mod for [GZDoom](https://zdoom.org) that allows [Twitch](https://twitch.tv) streamers to create commands that interact with GZDoom, allowing viewers to interact with their streams.
 
 Currently only tested with Streamlabs Chatbot.
 
@@ -14,7 +14,7 @@ Finally, your GZDoom launcher should add this folder to its list of external fil
 
 Here's an example launching with [ZDL](https://zdoom.org/wiki/ZDL):
 
-![Example Launch](examples/example_zdl.png)
+![Example Launch](docs/examples/example_zdl.png)
 
 To confirm everything is set up, boot up GZDoom. You should see a message confirming the game is working. If you don't get a message, TwitchyDoom pk3 is missing. If you get an error, your launcher is not pointing to the STREAM.txt folder correctly.
 
@@ -41,11 +41,12 @@ Here's an example of what response field should look like (assuming your STREAM.
 ```
 $savetofile("C:\MyFiles\Stream\STREAM.txt","SpawnItem|Actor=Medikit|$username|$dummyormsg")
 ```
+
 Which would trigger the SpawnItem TwitchyDoom command, spawning a Medikit near the player.
 
 Here's an example image of a command that spawns a Cacodemon:
 
-![Example Cacodemon](examples/example_cacodemon.png)
+![Example Cacodemon](docs/examples/example_cacodemon.png)
 
 Note that you can test your commands even when your stream is offline.
 
@@ -53,16 +54,16 @@ Note that you can test your commands even when your stream is offline.
 
 <!-- inter-toc commands -->
 
-* [GiveItem](commands/GiveItem.md)
-* [SpawnItem](commands/SpawnItem.md)
-* [SpawnMonster](commands/SpawnMonster.md)
-* [SpawnFriendlyMonster](commands/SpawnFriendlyMonster.md)
-* [SpawnOnPlayer](commands/SpawnOnPlayer.md)
-* [MassResurrect](commands/MassResurrect.md)
-* [GiveMonsterItem](commands/GiveMonsterItem.md)
-* [MonsterSound](commands/MonsterSound.md)
-* [ChangeMusic](commands/ChangeMusic.md)
-* [Log](commands/Log.md)
+* [GiveItem](docs/commands/GiveItem.md)
+* [SpawnItem](docs/commands/SpawnItem.md)
+* [SpawnMonster](docs/commands/SpawnMonster.md)
+* [SpawnFriendlyMonster](docs/commands/SpawnFriendlyMonster.md)
+* [SpawnOnPlayer](docs/commands/SpawnOnPlayer.md)
+* [MassResurrect](docs/commands/MassResurrect.md)
+* [GiveMonsterItem](docs/commands/GiveMonsterItem.md)
+* [MonsterSound](docs/commands/MonsterSound.md)
+* [ChangeMusic](docs/commands/ChangeMusic.md)
+* [Log](docs/commands/Log.md)
 
 <!-- end -->
 

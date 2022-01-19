@@ -1,0 +1,4 @@
+Maintained by FrozenFOXX
+Original mod by CutmanMike
+Jenocide font by Jimmy
+Libeye (pov name rendering) code by KeksDose (see zscript/libeye/libeye.txt for more info)

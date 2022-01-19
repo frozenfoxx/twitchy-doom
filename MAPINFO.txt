@@ -1,0 +1,4 @@
+GameInfo
+{
+	AddEventHandlers = "Twitchy_Handler", "Twitchy_NameRenderer"
+}

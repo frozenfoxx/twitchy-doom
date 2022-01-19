@@ -1,0 +1,378 @@
+Class Twitchy_Actor_MapMarker : MapMarker
+{
+	static void Show(Actor a)
+    {
+		if(!a)
+		{
+			return;
+		}
+
+		Twitchy_Actor_MapMarker m = Twitchy_Actor_MapMarker(a.Spawn("Twitchy_Actor_MapMarker", a.pos));
+		m.user = a;
+	}
+
+	Actor user;
+
+	Default
+	{
+		+NOINTERACTION;
+		-SOLID;
+		radius 1;
+		height 1;
+	}
+
+	States
+	{
+		Dummy:
+		TWMP A -1;
+		stop;
+		Spawn:
+		TNT1 A 1;
+		Looping:
+		"####" "#" 1
+		{
+			if(user)
+			{
+				if(Cvar.GetCvar("TwitchyDoom_BasicMapMarkers", players[0]).GetBool())
+				{
+					sprite = GetSpriteIndex("TWMP");
+					frame = 0;
+					A_Setscale(0.5, 0.5);
+				}
+				else
+				{
+					sprite = user.sprite;
+					frame = user.frame;
+					A_Setscale(user.default.scale.x / 4, user.default.scale.y / 4);
+				}
+				
+				SetOrigin(user.pos, false);
+				
+				
+				if(user.health < 1 && user.default.bSHOOTABLE)
+				{
+					SetStateLabel("Spawn");
+					return;
+				}
+			}
+			else
+			{
+				SetStateLabel("Death");
+			}
+		}
+		loop;
+		Death:
+		TNT1 A 1;
+		stop;
+	}
+}
+
+Class Twitchy_Actor_SafeSpawner : Actor
+{
+	Default
+	{
+		-SOLID;
+		+NOBLOCKMONST;
+		+FLOORCLIP;
+		//+DROPOFF;
+		maxstepheight 128;
+		+NOTRIGGER;
+		+NOTELEPORT;
+		+CANPASS;
+		-SHOOTABLE;
+		speed 10;
+		radius 2;
+		height 2;
+		renderstyle "none";
+	}
+
+	Array<String> inv;
+	int spawnableLocations;
+	Twitchy_SpawnerBase spawnercallback;
+	
+	Class<Actor> ActorToSpawn;
+	Class<Actor> ActorFX;
+	int moveCount;
+	
+	int tryradius;
+	int tryheight;
+	int maxsteps;
+	int amount;
+
+	Array<Actor> spots;
+	Array<Actor> spotsInRange;
+
+	int distance;
+
+	void GetSpawnSpots()
+	{
+		ThinkerIterator ti = ThinkerIterator.Create("Actor");
+			
+		Actor t;
+		Inventory i;
+			
+		while (t = Actor(ti.Next()))
+		{
+			if(distance > 0)
+			{
+				i = Inventory(t);
+				
+				if(t.bISMONSTER)
+				{
+					spots.Push(t);
+				}
+				
+				if(i is "Inventory" && !i.owner)
+				{
+					spots.Push(t);
+				}
+			}
+
+			if(t is "PlayerPawn")
+			{
+				spots.Push(t);
+			}
+		}
+
+		while(spotsInRange.Size() == 0)
+		{
+			if(distance<-1)
+			{
+				break;
+			}
+
+			for(int i; i<spots.Size(); i++)
+			{
+				double d = Distance2D(spots[i]);
+
+				if(d < distance + 256.0 && d > distance - 256)
+				{
+					spotsInRange.Push(spots[i]);
+					//Spawn("CyberDemon", spots[i].pos);
+				}
+			}
+
+			distance -= 256;
+		}
+	}
+
+	static Twitchy_Actor_SafeSpawner New(Class<Actor> actorToSpawn, int amount, Class<Actor> fx, int distnace)
+	{
+		if(!actorToSpawn || amount < 1)
+		{
+			return null;
+		}
+
+		Twitchy_Actor_SafeSpawner ss;
+		Vector3 p = Twitchy_Handler.RandomPlayer().pos;
+		
+		ss = Twitchy_Actor_SafeSpawner(Actor.Spawn("Twitchy_Actor_SafeSpawner", p));
+
+		ss.ActorToSpawn = actorToSpawn;
+		ss.amount = amount;
+		ss.maxsteps = 4;
+		ss.ActorFX = fx;
+
+		ss.distance = distnace;
+		ss.tryradius = GetDefaultByType(actorToSpawn).radius;
+		ss.tryheight = GetDefaultByType(actorToSpawn).height;
+		ss.GetSpawnSpots();
+
+		return ss;
+	}
+
+	States
+	{
+		Spawn:
+		PLAY A 0;
+		SeekNew:
+		PLAY A 1 {
+		if(spots.Size()==0 || amount < 1)
+		{
+			SetStateLabel("Death");
+			return;
+		}
+
+		if(TeleportToRandomActor())
+			{
+			SetStateLabel("Found");
+			return;
+			}
+		}
+		loop;
+		InSight:
+		PLAY A 1;
+		Found:
+		PLAY A 1 {
+			//Console.Printf("moving");
+			int i = random(0, 20);
+		
+			// Do some quick random movement
+			while(i>0)
+			{
+				i--;
+				for(int s = 0; s<maxsteps; s++)
+				{
+					//A_LogInt(maxsteps);
+					A_Wander();
+				}
+			}
+			movecount++;
+			
+			// If we've moved around this area too long, try somewhere new
+			if(movecount>30)
+			{
+				movecount = 0;
+				SetStateLabel("SeekNew");
+				return;
+			}
+
+			// Don't spawn oob!
+			if(!level.IsPointInLevel(pos))
+			{
+				return;
+			}
+
+			// Don't spawn too close to a player
+			if(TooCloseToPlayer())
+			{
+				return;
+			}
+			
+			// Go to the floor of the current sector
+			SetOrigin((pos.x, pos.y, floorz), false);
+			
+			if(!CheckCorners(self, tryradius))
+			{
+				return;
+			}
+			
+			// Check the radius/height of the actor we want to spawn
+			
+			bSOLID = true;
+			bCANPASS = false;
+			
+			if(!A_SetSize(tryradius, tryheight, true))
+			{
+				bSOLID = false;
+				bCANPASS = true;
+				return;
+			}	
+			
+			// Make sure we're not stuck in some dumb terrain and are unseen by the player
+			if(CheckBlock(flags: CBF_DROPOFF) || (LookForPlayers(true)))
+			{	
+				bSOLID = false;
+				bCANPASS = true;
+				A_SetSize(2, 2, 0);
+				return;
+			}
+			
+			bCANPASS = true;
+			bSOLID = false;
+			
+			// Quit if we have no actor to spawn
+			
+			if(!ActorToSpawn)
+			{
+				SetStateLabel("Death");
+				return;
+			}
+			
+			//A_Log("i am about to spawn");
+			Actor newActor = Spawn(ActorToSpawn, (pos.x, pos.y, floorz));
+			if(newActor)
+			{
+				newActor.angle = random(0,360);
+				amount--;
+				newActor.lastHeard = lastHeard;
+				newActor.target = target;
+				newActor.ObtainInventory(self);
+				GiveInventoryCopies(newActor);
+				newActor.A_SpawnItemEx(ActorFX, zofs: pos.z - floorz);
+				if(spawnercallback)
+				{
+					spawnercallback.spawnedactor = newActor;
+				}
+			}
+			
+			SetStateLabel("SeekNew");
+			
+			A_SetSize(2, 2, 0);
+		}
+		loop;
+		Success:
+		TNT1 A 2; //A_Print("success");
+		stop;
+		Death:
+		TNT1 A 2; //A_Print("Death!");
+		stop;
+	}
+
+	bool TooCloseToPlayer()
+	{
+		return CheckProximity("PlayerPawn", 48 + GetDefaultByType(actorToSpawn).radius, 1, CPXF_ANCESTOR|CPXF_NOZ);
+	}
+
+	bool TeleportToRandomActor()
+	{
+		if(spots.Size()==0)
+		{
+		return false;
+		}
+
+		movecount = 0;
+		
+		Actor a;
+		
+		if(spotsInRange.Size() > 0)
+		{
+			int r = random(0, spotsInRange.Size()-1);
+			a = spotsInRange[r];
+			spotsInRange.Delete(r);
+		}
+		else
+		{
+			a = spots[random(0, spots.Size()-1)];
+		}
+
+		if(a)
+		{
+			SetOrigin(a.pos, false);
+			return true;
+		}
+		
+		return false;
+	}
+
+	
+	void GiveInventoryCopies(Actor a)
+	{
+		for(int i; i < inv.Size(); i++)
+		{
+			a.GiveInventory(inv[i], 1);
+		}
+	}
+
+	static bool CheckCorners(Actor a, int tradius)
+	{
+			Vector3 tpos = a.pos;
+			Sector mysector = a.cursector;
+			
+			vector3 NWCorner = (-tradius, -tradius, 0);
+			vector3 NECorner = (tradius, -tradius, 0);
+			vector3 SWCorner = (-tradius, tradius, 0);
+			vector3 SECorner = (tradius, tradius, 0);
+			vector3 newpos = level.vec3offset(tpos, NWCorner);
+			
+			if(Level.PointInSector((newpos.x, newpos.y)) != mysector){return false;}
+			newpos = level.vec3offset(tpos, NECorner);
+			if(Level.PointInSector((newpos.x, newpos.y)) != mysector){return false;}
+			newpos = level.vec3offset(tpos, SWCorner);
+			if(Level.PointInSector((newpos.x, newpos.y)) != mysector){return false;}
+			newpos = level.vec3offset(tpos, SECorner);
+			if(Level.PointInSector((newpos.x, newpos.y)) != mysector){return false;}
+			
+			return true;
+	}
+}

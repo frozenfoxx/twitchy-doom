@@ -1,0 +1,32 @@
+// To start making a new TwitchyDoom Command, you must make a new class that inherits from Twitchy_Command.
+// TwitchyDoom will pick up any classes of this type that start with "TCommand_", with the desired name of the command following.
+
+// This command is called Test.
+Class TCommand_Test : Twitchy_Command
+{
+    // The Command function is triggered as soon as the game recieves the command from the bot.
+    // If the command specifies a delay, it will trigger after the delay has passed.
+    override void Command()
+    {
+        // Do stuff here
+        Console.Printf("Hello world!");
+
+        // It is important to destroy functions when they are done, or else they can remain in memory *forever*.
+        Destroy();
+    }
+
+    // This function is called every tick after the command has been sent (and after any delays).
+    // You can Destroy this class in here after a condition has been met if you need it to handle something over time.
+    override void CommandTick()
+    {
+    }
+
+    // The Notification function triggers before Command, and ignores any delays.
+    // If the streamer specifies NoNotify or has notifications turned off, this function will not be called.
+    // Use it only for printing optional messages to the streamer's screen.
+    override void Notification()
+    {
+    }
+}
+
+// See commands for more examples

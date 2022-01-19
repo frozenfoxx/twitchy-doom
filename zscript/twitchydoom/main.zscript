@@ -1,0 +1,417 @@
+Class Twitchy_Command : Thinker
+{
+    String username;
+    String paramsraw;
+    String messageraw;
+
+    int delay;
+
+    Array<String> Params;
+    Array<String> MessageParams;
+
+    virtual void Notification()
+    {
+    }
+    
+    override void PostBeginPlay()
+    {
+        Setup();
+        CheckGlobalParams();
+    }
+
+    void Setup()
+    {
+        username =  CVar.GetCvar("TwitchyDoom_Username", players[0]).GetString();
+        paramsraw =  CVar.GetCvar("TwitchyDoom_Params", players[0]).GetString();
+        messageraw =  CVar.GetCvar("TwitchyDoom_Message", players[0]).GetString();
+
+        paramsraw.Split(Params, ",", TOK_KEEPEMPTY);
+        messageraw.Split(MessageParams, ", ", TOK_KEEPEMPTY);
+
+        for(int i; i<MessageParams.Size(); i++)
+        {
+            MessageParams[i].Replace(", ", "");
+        }
+    }
+
+    String GetMessageParam(int i)
+    {
+        if(MessageParams.Size() > i)
+        {
+            return MessageParams[i];
+        }
+        return "";
+    }
+
+    String GetParam(String p)
+    {
+        for(int i; i<Params.Size(); i++)
+        {
+            String try = Params[i].Left(p.Length());
+            if(p ~== try && params[i].CharAt(p.Length()) == "=")
+            {
+                String s = Params[i].Mid(p.Length()+1, Params[i].Length()-1);
+                return s;
+            }
+        }
+
+        return "";
+    }
+
+    String GetParamString(String p)
+    {
+        String s = GetParam(p);
+        s.Replace('"', "");
+        return s;
+    }
+
+    void CheckGlobalParams()
+    {
+        String s;
+
+        s = GetParam("delay");
+        if(s.ToInt() > 0) 
+        {
+            delay = (s.ToInt()) * 35;
+        }
+
+        s = GetParam("noname");
+
+        if(s != "")
+        {
+            username = "???";
+        }
+
+        s = GetParam("nonotify");
+
+        if(s == "" && !CVar.GetCvar("TwitchyDoom_DisableNotifications", players[0]).GetBool())
+        {
+            Notification();
+        }
+    }
+
+    override void Tick()
+    {
+        Super.Tick();
+        if(delay > 0)
+        {
+            delay--;
+            return;
+        }
+        if(delay == 0)
+        {
+            Command();
+            delay--;
+        }
+
+        CommandTick();
+    }
+
+    virtual void Command()
+    {
+    }
+
+    virtual void CommandTick()
+    {
+    }
+
+}
+
+Class Twitchy_Handler : StaticEventHandler
+{
+    int index;
+    bool fillmonsterarray;
+    Array<Class<Actor> > monsters;
+    Array<Class<Twitchy_Command> > commands;
+    bool started;
+    bool firststart;
+    bool triggeredcmd;
+    String testcmd;
+    Vector3 startpos;
+
+    static String GetVersion()
+    {
+        return "beta 0.4";
+    }
+
+    static String GetParams()
+    {
+        if(!players[0].mo)
+        {
+            return "";
+        }
+
+        return CVar.GetCvar("TwitchyDoom_Params", players[0]).GetString();
+    }
+
+    static String GetUser()
+    {
+        if(!players[0].mo)
+        {
+            return "";
+        }
+        
+        return CVar.GetCvar("TwitchyDoom_Username", players[0]).GetString();
+    }
+
+    static String GetMsg()
+    {
+        if(!players[0].mo)
+        {
+            return "";
+        }
+        
+        return CVar.GetCvar("TwitchyDoom_Message", players[0]).GetString();
+    }
+
+    override void WorldLoaded(WorldEvent e)
+    {
+        index = 0;
+        started = false;
+        fillmonsterarray = true;
+        startpos = (0,0,0);
+
+        if(commands.Size() == 0)
+        {
+            for(int i; i<AllClasses.Size(); i++)
+            {
+                String s = AllClasses[i].GetClassName();
+
+                if(AllClasses[i] is "Twitchy_Command" && s.Left(9) ~== "TCommand_")
+                {
+                    commands.Push(AllClasses[i]);
+                }
+            }
+        }
+    }
+
+    bool CorruptionCardsCompat()
+    {
+        String check = "CCards_Game";
+
+        if(!EventHandler.Find(check))
+        {
+            return false;
+        }
+
+        if(CVar.GetCvar("CCards_Disable").GetBool())
+        {
+            return false;
+        }
+
+        if(!players[0].mo)
+        {
+            return true;
+        }
+
+        if(startpos == (0,0,0))
+        {
+            startpos = players[0].mo.pos;
+        }
+
+        if((players[0].mo.pos - startpos).Length() < 32)
+        {
+            return true;
+        }
+
+        return false;
+    }
+
+    override void WorldTick()
+    {
+        if((Level.Time % 35 == 0 || triggeredcmd) && Level.Time > 0)
+        {
+            if(!started)
+            {
+                if(CorruptionCardsCompat())
+                {
+                    return;
+                }
+
+                started = true;
+
+                if(Wads.FindLump("STREAM", 0, Wads.ANYNAMESPACE) == -1)
+                {
+                    Console.Printf("\cgERROR: TwitchyDoom cannot locate a \c-STREAM\cg file!");
+                    Console.Printf("\cgCreate a new directory with a single \c-STREAM.txt\cg inside and launch the game with the directory added to ZDoom.");
+                    Console.Printf("\cgSee TwitchyDoom on the ZDoom forums for more info on how to set up.");
+                    Destroy();
+                    return;
+                }
+
+                if(!firststart)
+                {
+                    firststart = true;
+                    Console.Printf("\ctTwitchyDoom \c-(\cv" .. GetVersion() .. "\c-) initialized! Found \cf" .. commands.Size() .. "\c- chat commands.");
+                }
+            }
+
+            Array<String> lines;
+
+            Cvar.GetCVar("TwitchyDoom_Username", players[0]).SetString("");
+            Cvar.GetCVar("TwitchyDoom_Message", players[0]).SetString("");   
+            Cvar.GetCVar("TwitchyDoom_Params", players[0]).SetString("");   
+
+            if(fillmonsterarray)
+            {
+                GenerateMonsterArray();
+                fillmonsterarray = false;
+            }
+
+            int lastlmp = Wads.FindLump("STREAM", 0, Wads.ANYNAMESPACE);
+
+            Wads.ReadLump(lastlmp).Split(lines, "\n", TOK_KEEPEMPTY);
+
+            if(index == 0)
+            {
+                index = lines.Size();
+            }
+
+            String test = Cvar.GetCVar("TwitchyDoom_Test", players[0]).GetString();
+
+            if(lines.Size() > index || test != "")
+            {
+                String line = lines[index-1];
+                line.Replace("\r", "");
+			    line.Replace("\n", "");
+			    line.Replace("\0", "");
+
+                Array<String> params;
+
+                line.Split(params, "|", TOK_KEEPEMPTY);
+
+                if(test != testcmd && test != "")
+                {
+                    params.Clear();
+                    test.Split(params, "|", TOK_KEEPEMPTY);
+                    Cvar.GetCVar("TwitchyDoom_Test", players[0]).SetString("");
+                    testcmd = test;
+                }
+
+                if(params.Size() < 2)
+                {
+                    return;
+                }
+
+                Cvar.GetCVar("TwitchyDoom_Params", players[0]).SetString(params[1]); 
+
+                if(params.Size()>2)
+                {
+                    Cvar.GetCVar("TwitchyDoom_Username", players[0]).SetString(params[2]); 
+                }
+
+                if(params.Size()>3)
+                {
+                    Cvar.GetCVar("TwitchyDoom_Message", players[0]).SetString(params[3]);
+                }
+
+                triggeredcmd = TryCommand(params[0]);
+
+                if(!test)
+                {
+                    index++;
+                }
+            }
+        }
+    }
+    
+    Class<Actor> PickRandomMonster()
+	{
+		if(monsters.Size()==0)
+		{
+			return null;
+		}
+
+		return monsters[random(0, monsters.Size()-1)];
+	}
+
+	void GenerateMonsterArray()
+	{
+		ThinkerIterator ti = ThinkerIterator.Create("Actor");
+				
+		Actor t;
+				
+		while (t = Actor(ti.Next()))
+		{
+			if(t && IsLegalMonster(t))
+			{
+				bool dupe = false;
+
+				if(monsters.Size()>0)
+				{
+					for(int i = 0; i<monsters.Size(); i++)
+					{
+						if(t.GetClassName() == monsters[i].GetClassName())
+						{
+							dupe = true;
+							break;
+						}
+					}
+				}
+
+                if(dupe)
+                {
+                    continue;
+                }
+
+				monsters.Push(t.GetClass());
+			}
+		}		
+	}
+
+    static Actor RandomPlayer()
+	{
+		Array<PlayerPawn> ps;
+
+		for(int i; i<players.Size(); i++)
+		{
+            if(players[i].mo)
+            {
+			    ps.Push(players[i].mo);
+            }
+		}
+		
+		if(ps.Size()>0)
+		{
+			return ps[random(0, ps.Size()-1)];
+		}
+
+        Console.Printf("\cgError: Could not find a target player!");
+
+		return null;
+	}
+
+    bool IsLegalMonster(Actor a)
+	{
+		if(!a)
+		{
+			return false;
+		}
+		
+		if(a.bCOUNTKILL && !a.bFRIENDLY && a.bISMONSTER && a.GetClassName() != "CommanderKeen" && a.GetClassName() != "BossBrain" && !(a is "Inventory"))
+		{
+			return true;
+		}
+
+		return false;
+	}
+
+    bool TryCommand(String cmd)
+    {
+        for(int i; i<commands.Size(); i++)
+        {
+            String n = commands[i].GetClassName();
+            n.Remove(0, 9);
+
+            if(n ~== cmd)
+            {
+            Twitchy_Command t;
+            t = Twitchy_Command(new (commands[i]));
+            return true;
+            }
+        }
+
+        return false;
+    }
+}
+

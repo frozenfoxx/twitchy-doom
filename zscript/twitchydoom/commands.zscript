@@ -1,0 +1,680 @@
+// Give the streamer an inventory item directly
+Class TCommand_GiveItem : Twitchy_Command
+{
+    override void Command()
+    {
+        Class<Inventory> item;
+
+        // Fetch the item from the actor parameter
+        item = (Class<Inventory>)(GetParamString("actor"));
+
+        // Check if the invetory item is legal
+        if(!item)
+        {
+            Console.Printf("\cgInvalid item " .. GetParamString("actor"));
+            return;
+        }
+
+        // Check the optional amount parameter
+        int amount = Max(1, GetParam("amount").ToInt());
+
+        // Give all players this item
+        for(int i; i<8; i++)
+        {
+            if(Players[i].mo)
+            {
+                Players[i].mo.GiveInventory(item, amount);
+            }
+        }
+
+        Destroy();
+    }
+
+    override void Notification()
+    {
+        Class<Inventory> item;
+
+        item = (Class<Inventory>)(GetParamString("actor"));
+        
+        if(!item)
+        {
+            return;
+        }
+
+        // Print a message to the players to tell them which user gave them the item
+        Console.Printf(username .. " \cfIs giving you " .. GetDefaultByType(item).GetTag());
+    }
+}
+
+Class Twitchy_SpawnerBase : Twitchy_Command
+{
+    Twitchy_Actor_SafeSpawner spawner;
+    Actor spawnedactor;
+
+    Class<Actor> GetSpawnedActor(Class<Actor> a)
+    {
+        if(!a)
+        {
+            return null;
+        }
+
+        a = Actor.GetReplacement(a);
+
+        if(a is "RandomSpawner")
+        {
+            RandomSpawner rs = RandomSpawner(Actor.Spawn(a));
+            name n = rs.ChooseSpawn();
+            rs.Destroy();
+            return GetSpawnedActor(n);
+        }
+        else
+        {
+            return a;
+        }
+    }
+}
+
+// Spawn an object nearby the streamer, and print the user's name above it.
+Class TCommand_SpawnItem : Twitchy_SpawnerBase
+{
+    int distance;
+    String message;
+
+    override void Command()
+    {
+        distance = GetParamString("distance").ToInt();
+        distance = Clamp(distance, 1, 100);
+
+        if(GetParamString("distance") ~== "random")
+        {
+            distance = random (1, 50);
+        }
+
+        SpawnObject();
+    }
+
+    virtual void SpawnObject()
+    {
+        Class<Actor> a = GetParamString("actor");
+        a = GetSpawnedActor(a);
+
+        if(!a)
+        {
+            Console.Printf("\cgInvalid actor " .. GetParamString("actor"));
+            Destroy();
+            return;
+        }
+
+        Class<Actor> fx = GetParamString("effect");
+        fx = GetSpawnedActor(fx);
+
+        if(!fx)
+        {
+            fx = "TeleportFog";
+        }
+
+        int flags;
+
+        if(GetParamString("noLOS"))
+        {
+            flags = 4;
+        }
+
+        // Uses the SafeSpawner tool to spawn the object near the player
+
+        spawner = Twitchy_Actor_SafeSpawner.New(a, 1, fx, distance * 128);
+
+        if(!spawner)
+        {
+            return;
+        }
+
+        spawner.spawnercallback = self;
+
+        // Show the username above the object
+        Twitchy_Username.Show(spawner, username);
+    }
+
+    override void Tick()
+    {
+        // Wait until the actor has been successfully spawned
+        if(spawnedactor)
+        {
+            OnSpawn();
+            if(GetParamString("showmap"))
+            {
+                Twitchy_Actor_MapMarker.Show(spawnedactor);
+            }
+            Destroy();
+            return;
+        }
+
+        Super.Tick();
+    }
+
+    virtual void OnSpawn()
+    {
+    }
+}
+
+Class TCommand_SpawnOnPlayer : TCommand_SpawnItem
+{
+    override void SpawnObject()
+    {
+        Class<Actor> a = GetParamString("actor");
+
+        a = GetSpawnedActor(a);
+
+        if(!a)
+        {
+            Console.Printf("\cgInvalid actor " .. a);
+            Destroy();
+            return;
+        }
+
+        Actor player = Twitchy_Handler.RandomPlayer();
+
+        if(GetDefaultByType(a).bMISSILE)
+        {
+            spawnedactor = player.SpawnPlayerMissile(a);
+        }
+        else
+        {
+            spawnedactor = player.Spawn(a, player.pos);
+            // Show the username above the object
+            Twitchy_Username.Show(spawnedactor, username);
+        }
+    }
+
+    override void Notification()
+    {
+        Class<Actor> a = GetParamString("actor");
+
+        if(!a)
+        {
+            return;
+        }
+
+        // Print a message to the players to tell them which item you spawned
+        Console.Printf(username .. " \cfSent you a " .. GetDefaultByType(a).GetTag() .. "!");
+    }
+}
+
+// Spawn a monster near the streamer (but not too close), and have them aggro immediately
+// This monster is specified by the streamer, same as TCommand_SpawnItem
+Class TCommand_SpawnMonster : TCommand_SpawnItem
+{
+    override void SpawnObject()
+    {
+        Class<Actor> a = GetParamString("actor");
+        a = GetSpawnedActor(a);
+        if(!a)
+        {
+            Twitchy_Handler h = Twitchy_Handler(StaticEventHandler.Find("Twitchy_Handler"));
+
+            a = h.PickRandomMonster();
+        }
+
+        Class<Actor> fx = GetParamString("effect");
+        fx = GetSpawnedActor(fx);
+
+        if(!fx)
+        {
+            fx = "";
+        }
+
+        int flags;
+
+        if(GetParamString("noLOS"))
+        {
+            flags = 4;
+        }
+
+        // Uses the SafeSpawner tool to spawn the monster with no teleport fog
+        spawner = Twitchy_Actor_SafeSpawner.New(a, 1, fx, distance * 128);
+        
+        if(!spawner)
+        {
+            return;
+        }
+
+        spawner.spawnercallback = self;
+    }
+
+    override void OnSpawn()
+    {
+        if(spawnedactor)
+        {
+            Actor newtarget = Twitchy_Handler.RandomPlayer();
+
+            if(!newtarget)
+            {
+                return;
+            }
+            
+            // Show the username above the monster
+            //Console.Printf(username .. "");
+            Twitchy_Username.Show(spawnedactor, username);
+            spawnedactor.lastheard = newtarget;
+            spawnedactor.target = newtarget;
+        }
+    }
+}
+
+
+// Play a monster's sound 
+Class TCommand_MonsterSound : Twitchy_Command
+{
+    override void Command()
+    {
+        Array<String> sounds;
+
+        Class<Actor> a = GetParamString("actor");
+
+        // If not a valid class, get a random monster from the handler
+        if(!a)
+        {
+            Twitchy_Handler handler = Twitchy_Handler(StaticEventHandler.Find("Twitchy_Handler"));
+
+            if(handler)
+            {
+                Array<Class<Actor> > mons;
+
+                mons.Copy(handler.monsters);
+
+                if(mons.Size()>0)
+                {
+                a = mons[random(0, mons.Size()-1)];
+                }
+                else
+                {
+                    Destroy();
+                    return;
+                }
+            }
+        }
+
+        // If somehow after that there are still no monsters found, end
+        if(!a)
+        {
+            Destroy();
+            return;
+        }
+
+        // Get the monster's sounds sounds
+        if(GetDefaultByType(a).seesound)
+        {
+            sounds.Push(GetDefaultByType(a).seesound);
+        }
+        if(GetDefaultByType(a).activesound)
+        {
+            sounds.Push(GetDefaultByType(a).activesound);
+        }
+
+        if(sounds.Size() == 0)
+        {
+            Destroy();
+            return;
+        }
+
+        // Pick a sound at random to play
+        String s = sounds[random(0, sounds.Size()-1)];
+
+        Twitchy_Handler.RandomPlayer().A_StartSound(s, CHAN_AUTO, CHANF_LOCAL, frandom(0.5, 1.0) ,ATTN_NORM); 
+
+        // Destroy this Twitchy_Command after so it doesn't linger in memory.
+        Destroy();
+    }
+}
+
+// Spawn a friendly monster
+Class TCommand_SpawnFriendlyMonster : Twitchy_Command
+{
+    Class<Actor> monster;
+
+    override void Command()
+    {
+        monster = GetParamString("actor");
+
+        if(!monster)
+        {
+            Twitchy_Handler h = Twitchy_Handler(StaticEventHandler.Find("Twitchy_Handler"));
+
+            monster = h.PickRandomMonster();
+        }
+
+        if(!monster)
+        {
+            Destroy();
+            return;
+        }
+
+        Actor player = Twitchy_Handler.RandomPlayer();
+
+        Actor a = Actor.Spawn(monster, player.pos);
+        if(a.bSHOOTABLE)
+        {
+            a.bSHOOTABLE = false;
+            a.GiveInventory("Twitchy_FriendlySpawnProtection", 1);
+            a.GiveInventory("Twitchy_FriendlyFireProtection", 1);
+        }
+
+        if(a.bCOUNTKILL)
+        {
+            a.A_ChangeCountFlags(0);
+            a.bCOUNTKILL = false;
+        }
+
+        a.bFRIENDLY = true;
+        a.bNOBLOCKMONST = true;
+        a.bSOLID = false;
+        a.target = player;
+        a.lastheard = player;
+        a.A_SpawnItemEx("TeleportFog");
+
+        if(!GetParamString("nofollow"))
+        {
+            a.GiveInventory("Twitchy_FriendlyFollower", 1);
+        }
+        if(GetParamString("showmap"))
+        {
+            Twitchy_Actor_MapMarker.Show(a);
+        }
+
+        Twitchy_Username.Show(a, username .. " (ALLY)");
+    }
+
+    override void Notification()
+    {
+        Console.Printf("\cf" .. username .. " \c-joined the game.");
+   
+        //S_Sound("misc/chat", CHAN_VOICE | CHAN_UI);
+        //Console.Printf("\cf" .. username .. "\c-: \c*" .. messageRaw);
+    }
+}
+
+class Twitchy_FriendlyFireProtection : Inventory
+{
+    override void Tick()
+    {
+        if(owner)
+        {
+            owner.bFRIENDLY = true;
+        }
+        Super.Tick();
+    }
+
+    override void ModifyDamage (int damage, Name damageType, out int newdamage, bool passive, Actor inflictor, Actor source, int flags)
+    {
+        if((source && (source.player || source.bFRIENDLY)) || inflictor && (inflictor.player || inflictor.bFRIENDLY))
+        {
+            newdamage = 0;
+        }
+    }
+}
+
+class Twitchy_FriendlySpawnProtection : Powerup
+{
+    Default
+    {
+        powerup.duration -3;
+    }
+
+    override void DetachFromOwner()
+    {
+        if(owner)
+        {
+            owner.bSHOOTABLE = true;
+        }
+    }
+}
+
+class Twitchy_FriendlyFollower : Inventory
+{
+    Default
+    {
+        inventory.maxamount 1;
+    }
+
+    Actor player;
+    int followtimer;
+    Vector3 playerpos;
+
+    override void Tick()
+    {
+        if(Level.Time % 35 == 0)
+        {
+            if(owner && owner.health > 0)
+            {
+                if(!player)
+                {
+                    player = Twitchy_Handler.RandomPlayer();
+                    if(!player)
+                    {
+                        return;
+                    }
+                }
+
+                if(owner.Distance2D(player) > 512)
+                {
+                    followtimer++;
+                }
+                else
+                {
+                    followtimer = 0;
+                }
+
+                if(followtimer == 10)
+                {
+                    playerpos = player.pos;
+                }
+
+                if(followtimer >= 11)
+                {
+                    if(level.vec3diff(owner.pos, player.pos).length() < 64)
+                    {
+                        followtimer = 10;
+                    }
+                    else
+                    {
+                        owner.Spawn("TeleportFog", owner.pos);
+                        owner.SetOrigin(playerpos, false);
+                        owner.A_ClearTarget();
+                        owner.Spawn("TeleportFog", playerpos);
+                        owner.GiveInventory("Twitchy_FriendlySpawnProtection", 1);
+                        followtimer = 0;
+                    }
+                }                
+            }
+        }
+    }
+}
+
+
+// Resurrect nearby monsters. Streamer decides the radius
+Class TCommand_MassResurrect : Twitchy_Command
+{
+    override void Command()
+    {
+        Actor player = Twitchy_Handler.RandomPlayer();
+        Actor t;
+        int maxdist = GetParam("radius").ToInt();
+
+        if(maxdist == 0)
+        {
+            maxdist = 600;
+        }
+
+		ThinkerIterator ti = ThinkerIterator.Create("Actor");
+
+		while (t = Actor(ti.Next()))
+		{
+			if(!t || t.health>0 || !t.bISMONSTER || t.Distance2D(player) > maxdist)
+			{
+				continue;
+			}
+			t.RaiseActor(t);
+		}
+
+        Destroy();
+        return;
+    }
+
+    override void Notification()
+    {
+        // Print a message to the players to tell them which user gave them the item
+        Console.Printf(username .. " \cgIs raising the dead!");
+    }
+}
+
+// Give a random living monster an inventory item
+// Only useful if you know what you're doing
+Class TCommand_GiveMonsterItem : Twitchy_Command
+{
+    const MAXRADIUS = 10000;
+
+    override void Command()
+    {
+        Class<Inventory> item;
+        int radius = GetParamString("radius").ToInt() * 128;
+
+        if(radius > 0)
+        {
+            radius = Min(MAXRADIUS, radius);
+        }
+        else
+        {
+            radius = MAXRADIUS;
+        }
+
+        Actor player = Twitchy_Handler.RandomPlayer();
+        
+        if(!player)
+        {
+            return;
+        }
+
+        // Fetch the item from the actor parameter
+        item = (Class<Inventory>)(GetParamString("actor"));
+
+        // Check if the invetory item is legal
+        if(!item)
+        {
+            Console.Printf("\cgInvalid item " .. GetParamString("actor"));
+            return;
+        }
+
+        // Check the optional amount parameter
+        int amount = Max(1, GetParam("amount").ToInt());
+
+        Array<Actor> monsters;
+        Array<Actor> monstersInRange;
+
+		Actor t;
+		ThinkerIterator ti = ThinkerIterator.Create("Actor");
+
+        // Find all monsters
+
+		while (t = Actor(ti.Next()))
+		{
+            if(t.bISMONSTER && t.health > 0 && t.bSHOOTABLE && !t.bFRIENDLY)
+            {
+			    monsters.Push(t);
+            }
+		}
+
+        if(monsters.Size()==0)
+        {
+            Destroy();
+            return;
+        }
+
+        // Try to get monsters within radius
+        // If it can't, expand the radius
+        while(monstersInRange.Size() == 0 && radius < MAXRADIUS)
+        {
+            for(int i; i<monsters.Size(); i++)
+            {
+                if(monsters[i].Distance2D(player) < radius)
+                {
+                    monstersInRange.Push(monsters[i]);
+                }
+            }
+
+            radius += 256;
+        }
+
+        if(monstersInRange.Size() == 0)
+        {
+            monstersInRange.Copy(monsters);
+        }
+
+        // Give a random monster the item
+
+		int r = random(0, monstersInRange.Size()-1);
+		monstersInRange[r].GiveInventory(item, amount);
+
+        if(GetParam("addname"))
+        {
+		    Twitchy_Username.Show(monstersInRange[r], username);
+        }
+
+        Destroy();
+        return;
+    }
+}
+
+// Change the level music
+Class TCommand_ChangeMusic : Twitchy_Command
+{
+    int timer;
+
+    override void Command()
+    {
+        // Change it back after a duration if specified
+        timer = GetParam("duration").ToInt();
+
+        // Fetch the song
+        S_ChangeMusic(GetParam("song"));
+
+        if(timer == 0)
+        {
+            timer = -1;
+            Destroy();
+            return;
+        }
+        else
+        {
+            timer = timer * 35;
+        }
+    }
+
+    override void CommandTick()
+    {
+        if(timer == 0)
+        {
+            S_ChangeMusic("*");
+            Destroy();
+            return;
+        }
+
+        timer--;
+    }
+}
+
+// Streamer Logs to the console
+Class TCommand_Log : Twitchy_Command
+{
+    override void Command()
+    {
+        Destroy();
+        return;
+    }
+
+    override void Notification()
+    {
+        String s = messageraw.Filter();
+ 
+        Console.Printf("" .. s);
+    }
+}

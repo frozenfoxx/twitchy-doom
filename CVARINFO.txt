@@ -1,0 +1,9 @@
+user bool TwitchyDoom_DisableNotifications = false;
+user string TwitchyDoom_Test = "";
+user string TwitchyDoom_UsernameFont = "";
+user bool TwitchyDoom_BasicMapMarkers = false;
+
+// Internal stuff
+user string TwitchyDoom_Username = "";
+user string TwitchyDoom_Message = "";
+user string TwitchyDoom_Params = "";
